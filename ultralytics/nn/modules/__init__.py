@@ -36,6 +36,8 @@ from .block import (
     Attention,
     BNContrastiveHead,
     Bottleneck,
+    C2fDSConv,
+    DSBottleneck,
     BottleneckCSP,
     C2f,
     C2fAttn,
@@ -76,6 +78,7 @@ from .conv import (
     RepConv,
     SpatialAttention,
 )
+from .dsconv import DSConvConv
 from .head import (
     OBB,
     Classify,
@@ -89,6 +92,8 @@ from .head import (
     YOLOESegment,
     v10Detect,
 )
+from .prior_fusion import GatedAddFusion, PriorFusion, PriorStem
+from .strip_pooling import StripPooling, StripPoolingAttn
 from .transformer import (
     AIFI,
     MLP,
@@ -125,6 +130,8 @@ __all__ = (
     "Attention",
     "BNContrastiveHead",
     "Bottleneck",
+    "C2fDSConv",
+    "DSBottleneck",
     "BottleneckCSP",
     "C2f",
     "C2fAttn",
@@ -154,6 +161,7 @@ __all__ = (
     "HGStem",
     "ImagePoolingAttn",
     "Index",
+    "DSConvConv",
     "LRPCHead",
     "LayerNorm2d",
     "LightConv",
@@ -162,6 +170,9 @@ __all__ = (
     "MaxSigmoidAttnBlock",
     "Pose",
     "Proto",
+    "GatedAddFusion",
+    "PriorFusion",
+    "PriorStem",
     "RTDETRDecoder",
     "RepC3",
     "RepConv",
@@ -170,6 +181,8 @@ __all__ = (
     "ResNetLayer",
     "SCDown",
     "Segment",
+    "StripPooling",
+    "StripPoolingAttn",
     "SpatialAttention",
     "TorchVision",
     "TransformerBlock",

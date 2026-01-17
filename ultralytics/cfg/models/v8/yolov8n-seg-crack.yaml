@@ -1,0 +1,51 @@
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+
+# YOLOv8n-seg crack segmentation model with priors + DSConv + StripPooling
+
+# Parameters
+nc: 80 # number of classes
+scales: # model compound scaling constants
+  # [depth, width, max_channels]
+  n: [0.33, 0.25, 1024]
+
+use_priors: True
+prior_channels: 2
+use_dsconv: True
+use_strippooling: True
+
+# YOLOv8n backbone
+backbone:
+  # [from, repeats, module, args]
+  - [-1, 1, Conv, [64, 3, 2]] # 0-P1/2
+  - [-1, 1, Conv, [128, 3, 2]] # 1-P2/4
+  - [-1, 3, C2fDSConv, [128, True, 1, 0.5, use_dsconv]]
+  - [-1, 1, PriorFusion, [prior_channels, use_priors]] # 3-P2/4 prior fusion
+  - [-1, 1, Conv, [256, 3, 2]] # 4-P3/8
+  - [-1, 6, C2fDSConv, [256, True, 1, 0.5, use_dsconv]]
+  - [-1, 1, Conv, [512, 3, 2]] # 6-P4/16
+  - [-1, 6, C2f, [512, True]]
+  - [-1, 1, Conv, [1024, 3, 2]] # 8-P5/32
+  - [-1, 3, C2f, [1024, True]]
+  - [-1, 1, SPPF, [1024, 5]] # 10
+
+# YOLOv8n head
+head:
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]
+  - [[-1, 7], 1, Concat, [1]] # cat backbone P4
+  - [-1, 3, C2f, [512]] # 13
+
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]
+  - [[-1, 5], 1, Concat, [1]] # cat backbone P3
+  - [-1, 3, C2f, [256]] # 16 (P3/8-small)
+  - [-1, 1, StripPoolingAttn, [use_strippooling]]
+
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [[-1, 13], 1, Concat, [1]] # cat head P4
+  - [-1, 3, C2f, [512]] # 20 (P4/16-medium)
+  - [-1, 1, StripPoolingAttn, [use_strippooling]]
+
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [[-1, 10], 1, Concat, [1]] # cat head P5
+  - [-1, 3, C2f, [1024]] # 24 (P5/32-large)
+
+  - [[17, 21, 24], 1, Segment, [nc, 32, 256]] # Segment(P3, P4, P5)
