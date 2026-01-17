@@ -85,8 +85,6 @@ class DynamicSnakeConv(nn.Module):
         grid = grid - 1.0
 
         x = F.grid_sample(x, grid, mode="bilinear", padding_mode="zeros", align_corners=False)
-        x = x.reshape(n, -1, ks, h, w)
-        x = x.permute(0, 1, 3, 2, 4).reshape(n, -1, h, ks * w)
         x = self.conv_kernel(x)
 
         return x
