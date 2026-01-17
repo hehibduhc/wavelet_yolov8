@@ -1,14 +1,11 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
 class StripPooling(nn.Module):
-    """
-    Strip Pooling core: aggregate long-range context by pooling along one spatial dimension.
-    """
+    """Strip Pooling core: aggregate long-range context by pooling along one spatial dimension."""
 
     def __init__(self, channels: int, reduction: int = 4, norm=nn.BatchNorm2d):
         super().__init__()
@@ -31,7 +28,7 @@ class StripPooling(nn.Module):
         self.conv2 = nn.Conv2d(mid, channels, kernel_size=1, bias=True)
 
     def forward(self, x):
-        b, c, h, w = x.shape
+        _b, _c, h, w = x.shape
         y = self.conv1(x)
 
         # pool along width -> (B, mid, H, 1)
@@ -50,9 +47,7 @@ class StripPooling(nn.Module):
 
 
 class StripPoolingAttn(nn.Module):
-    """
-    Residual attention wrapper: x * sigmoid(StripPooling(x)) + x
-    """
+    """Residual attention wrapper: x * sigmoid(StripPooling(x)) + x."""
 
     def __init__(self, channels: int, enabled: bool = True, reduction: int = 4, norm=nn.BatchNorm2d):
         super().__init__()
