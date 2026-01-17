@@ -33,6 +33,7 @@ from ultralytics.nn.modules import (
     C2fAttn,
     C2fCIB,
     C2fPSA,
+    C2fDSConv,
     C3Ghost,
     C3k2,
     C3x,
@@ -46,6 +47,7 @@ from ultralytics.nn.modules import (
     Detect,
     DWConv,
     DWConvTranspose2d,
+    DSConvConv,
     Focus,
     GhostBottleneck,
     GhostConv,
@@ -63,11 +65,13 @@ from ultralytics.nn.modules import (
     RTDETRDecoder,
     SCDown,
     Segment,
+    StripPoolingAttn,
     TorchVision,
     WorldDetect,
     YOLOEDetect,
     YOLOESegment,
     v10Detect,
+    PriorFusion,
 )
 from ultralytics.utils import DEFAULT_CFG_DICT, LOGGER, YAML, colorstr, emojis
 from ultralytics.utils.checks import check_requirements, check_suffix, check_yaml
@@ -136,7 +140,7 @@ class BaseModel(torch.nn.Module):
             return self.loss(x, *args, **kwargs)
         return self.predict(x, *args, **kwargs)
 
-    def predict(self, x, profile=False, visualize=False, augment=False, embed=None):
+    def predict(self, x, profile=False, visualize=False, augment=False, embed=None, priors=None):
         """Perform a forward pass through the network.
 
         Args:
@@ -151,9 +155,9 @@ class BaseModel(torch.nn.Module):
         """
         if augment:
             return self._predict_augment(x)
-        return self._predict_once(x, profile, visualize, embed)
+        return self._predict_once(x, profile, visualize, embed, priors=priors)
 
-    def _predict_once(self, x, profile=False, visualize=False, embed=None):
+    def _predict_once(self, x, profile=False, visualize=False, embed=None, priors=None):
         """Perform a forward pass through the network.
 
         Args:
@@ -172,8 +176,11 @@ class BaseModel(torch.nn.Module):
             if m.f != -1:  # if not from previous layer
                 x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]  # from earlier layers
             if profile:
-                self._profile_one_layer(m, x, dt)
-            x = m(x)  # run
+                self._profile_one_layer(m, x, dt, priors=priors)
+            if getattr(m, "uses_priors", False):
+                x = m(x, priors)  # run with priors
+            else:
+                x = m(x)  # run
             y.append(x if m.i in self.save else None)  # save output
             if visualize:
                 feature_visualization(x, m.type, m.i, save_dir=visualize)
@@ -191,7 +198,7 @@ class BaseModel(torch.nn.Module):
         )
         return self._predict_once(x)
 
-    def _profile_one_layer(self, m, x, dt):
+    def _profile_one_layer(self, m, x, dt, priors=None):
         """Profile the computation time and FLOPs of a single layer of the model on a given input.
 
         Args:
@@ -205,10 +212,16 @@ class BaseModel(torch.nn.Module):
             thop = None  # conda support without 'ultralytics-thop' installed
 
         c = m == self.model[-1] and isinstance(x, list)  # is final layer list, copy input as inplace fix
-        flops = thop.profile(m, inputs=[x.copy() if c else x], verbose=False)[0] / 1e9 * 2 if thop else 0  # GFLOPs
+        inputs = [x.copy() if c else x]
+        if getattr(m, "uses_priors", False) and priors is not None:
+            inputs.append(priors)
+        flops = thop.profile(m, inputs=inputs, verbose=False)[0] / 1e9 * 2 if thop else 0  # GFLOPs
         t = time_sync()
         for _ in range(10):
-            m(x.copy() if c else x)
+            if getattr(m, "uses_priors", False) and priors is not None:
+                m(x.copy() if c else x, priors)
+            else:
+                m(x.copy() if c else x)
         dt.append((time_sync() - t) * 100)
         if m == self.model[0]:
             LOGGER.info(f"{'time (ms)':>10s} {'GFLOPs':>10s} {'params':>10s}  module")
@@ -324,7 +337,7 @@ class BaseModel(torch.nn.Module):
             self.criterion = self.init_criterion()
 
         if preds is None:
-            preds = self.forward(batch["img"])
+            preds = self.forward(batch["img"], priors=batch.get("priors", None))
         return self.criterion(preds, batch)
 
     def init_criterion(self):
@@ -1500,6 +1513,10 @@ def parse_model(d, ch, verbose=True):
     legacy = True  # backward compatibility for v3/v5/v8/v9 models
     max_channels = float("inf")
     nc, act, scales = (d.get(x) for x in ("nc", "activation", "scales"))
+    use_priors = d.get("use_priors", False)
+    use_dsconv = d.get("use_dsconv", False)
+    use_strippooling = d.get("use_strippooling", False)
+    prior_channels = d.get("prior_channels", 2)
     depth, width, kpt_shape = (d.get(x, 1.0) for x in ("depth_multiple", "width_multiple", "kpt_shape"))
     scale = d.get("scale")
     if scales:
@@ -1522,11 +1539,13 @@ def parse_model(d, ch, verbose=True):
             Classify,
             Conv,
             ConvTranspose,
+            DSConvConv,
             GhostConv,
             Bottleneck,
             GhostBottleneck,
             SPP,
             SPPF,
+            C2fDSConv,
             C2fPSA,
             C2PSA,
             DWConv,
@@ -1561,6 +1580,7 @@ def parse_model(d, ch, verbose=True):
             C1,
             C2,
             C2f,
+            C2fDSConv,
             C3k2,
             C2fAttn,
             C3,
@@ -1619,6 +1639,9 @@ def parse_model(d, ch, verbose=True):
                 n = 1
         elif m is ResNetLayer:
             c2 = args[1] if args[3] else args[1] * 4
+        elif m in {PriorFusion, StripPoolingAttn}:
+            c2 = ch[f]
+            args = [c2, *args]
         elif m is torch.nn.BatchNorm2d:
             args = [ch[f]]
         elif m is Concat:

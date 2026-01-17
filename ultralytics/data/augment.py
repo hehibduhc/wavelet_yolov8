@@ -2024,6 +2024,102 @@ class Albumentations:
         return labels
 
 
+class CrackPrior:
+    """Compute wavelet and fractal prior maps for crack segmentation."""
+
+    def __init__(
+        self,
+        enable: bool = True,
+        prior_scales: tuple[int, ...] = (2, 4, 8, 16, 32),
+        block_size: int = 32,
+    ):
+        self.enable = enable
+        self.prior_scales = prior_scales
+        self.block_size = block_size
+
+    def _normalize(self, x: np.ndarray) -> np.ndarray:
+        x_min = float(x.min())
+        x_max = float(x.max())
+        if x_max - x_min < 1e-6:
+            return np.zeros_like(x, dtype=np.float32)
+        return ((x - x_min) / (x_max - x_min)).astype(np.float32)
+
+    def _wavelet_hf(self, gray: np.ndarray) -> np.ndarray:
+        h, w = gray.shape
+        pad_h = h % 2
+        pad_w = w % 2
+        if pad_h or pad_w:
+            gray = np.pad(gray, ((0, pad_h), (0, pad_w)), mode="reflect")
+        x00 = gray[0::2, 0::2]
+        x01 = gray[0::2, 1::2]
+        x10 = gray[1::2, 0::2]
+        x11 = gray[1::2, 1::2]
+        lh = (x00 - x01 + x10 - x11) / 4.0
+        hl = (x00 + x01 - x10 - x11) / 4.0
+        hh = (x00 - x01 - x10 + x11) / 4.0
+        hf = np.sqrt(lh**2 + hl**2 + hh**2)
+        hf = cv2.resize(hf, (w, h), interpolation=cv2.INTER_LINEAR)
+        return self._normalize(hf)
+
+    def _edge_map(self, gray: np.ndarray) -> np.ndarray:
+        gx = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)
+        gy = cv2.Sobel(gray, cv2.CV_32F, 0, 1, ksize=3)
+        mag = np.sqrt(gx**2 + gy**2)
+        thresh = np.percentile(mag, 75)
+        return (mag > thresh).astype(np.uint8)
+
+    def _count_nonempty_boxes(self, block: np.ndarray, eps: int) -> int:
+        h, w = block.shape
+        h_pad = int(math.ceil(h / eps) * eps)
+        w_pad = int(math.ceil(w / eps) * eps)
+        padded = np.pad(block, ((0, h_pad - h), (0, w_pad - w)), mode="constant")
+        reshaped = padded.reshape(h_pad // eps, eps, w_pad // eps, eps)
+        occupied = reshaped.max(axis=(1, 3))
+        return int(occupied.sum())
+
+    def _fractal_dimension(self, block: np.ndarray, scales: list[int]) -> float:
+        counts = np.array([self._count_nonempty_boxes(block, eps) for eps in scales], dtype=np.float32)
+        if np.any(counts <= 0):
+            return 0.0
+        x = np.log(1.0 / np.array(scales, dtype=np.float32))
+        y = np.log(counts)
+        A = np.vstack([x, np.ones_like(x)]).T
+        slope, _ = np.linalg.lstsq(A, y, rcond=None)[0]
+        return float(slope)
+
+    def _fractal_map(self, edge: np.ndarray) -> np.ndarray:
+        h, w = edge.shape
+        block = self.block_size
+        max_scale = min(block, h, w)
+        scales = [s for s in self.prior_scales if s <= max_scale]
+        if len(scales) < 2:
+            scales = [2, 4]
+        out = np.zeros((h, w), dtype=np.float32)
+        for y in range(0, h, block):
+            for x in range(0, w, block):
+                patch = edge[y : y + block, x : x + block]
+                d = self._fractal_dimension(patch, scales)
+                out[y : y + block, x : x + block] = d
+        return self._normalize(out)
+
+    def __call__(self, labels: dict[str, Any]) -> dict[str, Any]:
+        if not self.enable:
+            return labels
+        img = labels.get("img")
+        if img is None:
+            return labels
+        gray = img.astype(np.float32)
+        if gray.ndim == 3:
+            gray = 0.114 * gray[..., 0] + 0.587 * gray[..., 1] + 0.299 * gray[..., 2]
+        gray = gray.astype(np.float32)
+        hf = self._wavelet_hf(gray)
+        edge = self._edge_map(gray)
+        fractal = self._fractal_map(edge)
+        priors = np.stack([hf, fractal], axis=0).astype(np.float32)
+        labels["priors"] = priors
+        return labels
+
+
 class Format:
     """A class for formatting image annotations for object detection, instance segmentation, and pose estimation tasks.
 
@@ -2153,6 +2249,9 @@ class Format:
                 )
             labels["masks"] = masks
         labels["img"] = self._format_img(img)
+        if "priors" in labels:
+            priors = labels.pop("priors")
+            labels["priors"] = torch.from_numpy(priors.astype(np.float32))
         labels["cls"] = torch.from_numpy(cls) if nl else torch.zeros(nl, 1)
         labels["bboxes"] = torch.from_numpy(instances.bboxes) if nl else torch.zeros((nl, 4))
         if self.return_keypoint:
