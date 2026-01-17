@@ -246,6 +246,10 @@ Experience seamless AI with [Ultralytics HUB](https://hub.ultralytics.com/), the
 <a href="https://www.ultralytics.com/hub" target="_blank">
 <img width="100%" src="https://github.com/ultralytics/assets/raw/main/im/ultralytics-hub.png" alt="Ultralytics HUB preview image"></a>
 
+## 🧱 Crack Priors (Wavelet + Fractal)
+
+To enable handcrafted crack priors, use the `yolov8n-seg-crack.yaml` model and set `use_priors: True` (default in that YAML). The dataloader computes two extra maps per image: (1) Haar wavelet high-frequency magnitude, and (2) a local fractal dimension density map computed via multi-scale box-counting over a Sobel edge mask. These priors are normalized to `[0, 1]` and fed through the `PriorFusion` stem before being gated into the early backbone features.
+
 ## 🤝 Contribute
 
 We thrive on community collaboration! Ultralytics YOLO wouldn't be the SOTA framework it is without contributions from developers like you. Please see our [Contributing Guide](https://docs.ultralytics.com/help/contributing/) to get started. We also welcome your feedback—share your experience by completing our [Survey](https://www.ultralytics.com/survey?utm_source=github&utm_medium=social&utm_campaign=Survey). A huge **Thank You** 🙏 to everyone who contributes!

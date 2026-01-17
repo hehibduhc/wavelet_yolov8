@@ -10,6 +10,7 @@ import torch.nn.functional as F
 from ultralytics.utils.torch_utils import fuse_conv_and_bn
 
 from .conv import Conv, DWConv, GhostConv, LightConv, RepConv, autopad
+from .dsconv import DSConvConv
 from .transformer import TransformerBlock
 
 __all__ = (
@@ -30,8 +31,10 @@ __all__ = (
     "Attention",
     "BNContrastiveHead",
     "Bottleneck",
+    "DSBottleneck",
     "BottleneckCSP",
     "C2f",
+    "C2fDSConv",
     "C2fAttn",
     "C2fCIB",
     "C2fPSA",
@@ -314,6 +317,35 @@ class C2f(nn.Module):
         return self.cv2(torch.cat(y, 1))
 
 
+class C2fDSConv(nn.Module):
+    """C2f with Dynamic Snake Convolution in bottlenecks for thin structures."""
+
+    def __init__(
+        self,
+        c1: int,
+        c2: int,
+        n: int = 1,
+        shortcut: bool = False,
+        g: int = 1,
+        e: float = 0.5,
+        use_dsconv: bool = True,
+    ):
+        """Initialize a DSConv-enabled C2f block."""
+        super().__init__()
+        self.c = int(c2 * e)
+        self.cv1 = DSConvConv(c1, 2 * self.c, 1, 1, use_dsconv=use_dsconv)
+        self.cv2 = DSConvConv((2 + n) * self.c, c2, 1, 1, use_dsconv=use_dsconv)
+        self.m = nn.ModuleList(
+            DSBottleneck(self.c, self.c, shortcut, g, k=((3, 3), (3, 3)), e=1.0, use_dsconv=use_dsconv)
+            for _ in range(n)
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through C2fDSConv layer."""
+        y = list(self.cv1(x).chunk(2, 1))
+        y.extend(m(y[-1]) for m in self.m)
+        return self.cv2(torch.cat(y, 1))
+
 class C3(nn.Module):
     """CSP Bottleneck with 3 convolutions."""
 
@@ -473,6 +505,41 @@ class Bottleneck(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Apply bottleneck with optional shortcut connection."""
+        return x + self.cv2(self.cv1(x)) if self.add else self.cv2(self.cv1(x))
+
+
+class DSBottleneck(nn.Module):
+    """Bottleneck using Dynamic Snake Convolution in the main path."""
+
+    def __init__(
+        self,
+        c1: int,
+        c2: int,
+        shortcut: bool = True,
+        g: int = 1,
+        k: tuple[int, int] = (3, 3),
+        e: float = 0.5,
+        use_dsconv: bool = True,
+    ):
+        """Initialize a DSConv bottleneck module.
+
+        Args:
+            c1 (int): Input channels.
+            c2 (int): Output channels.
+            shortcut (bool): Whether to use shortcut connection.
+            g (int): Groups for convolutions.
+            k (tuple): Kernel sizes for convolutions.
+            e (float): Expansion ratio.
+            use_dsconv (bool): Whether to enable DSConv.
+        """
+        super().__init__()
+        c_ = int(c2 * e)
+        self.cv1 = DSConvConv(c1, c_, k[0], 1, use_dsconv=use_dsconv)
+        self.cv2 = DSConvConv(c_, c2, k[1], 1, g=g, use_dsconv=use_dsconv)
+        self.add = shortcut and c1 == c2
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply DSConv bottleneck with optional shortcut connection."""
         return x + self.cv2(self.cv1(x)) if self.add else self.cv2(self.cv1(x))
 
 
