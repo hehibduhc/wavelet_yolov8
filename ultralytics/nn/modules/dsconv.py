@@ -37,7 +37,8 @@ class DynamicSnakeConv(nn.Module):
 
     def _reset_parameters(self) -> None:
         nn.init.constant_(self.offset.weight, 0.0)
-        nn.init.constant_(self.offset.bias, 0.0)
+        if self.offset.bias is not None:
+            nn.init.constant_(self.offset.bias, 0.0)
         nn.init.kaiming_normal_(self.conv_kernel.weight, mode="fan_out", nonlinearity="relu")
         if self.conv_kernel.bias is not None:
             nn.init.constant_(self.conv_kernel.bias, 0.0)
