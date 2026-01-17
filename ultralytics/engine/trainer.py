@@ -736,6 +736,17 @@ class BaseTrainer:
     def set_model_attributes(self):
         """Set or update model parameters before training."""
         self.model.names = self.data["names"]
+        if hasattr(self.model, "yaml"):
+            for key in (
+                "use_priors",
+                "prior_channels",
+                "prior_block_size",
+                "prior_scales",
+                "use_dsconv",
+                "use_strippooling",
+            ):
+                if key in self.model.yaml:
+                    setattr(self.args, key, self.model.yaml[key])
 
     def build_targets(self, preds, targets):
         """Build target tensors for training YOLO model."""

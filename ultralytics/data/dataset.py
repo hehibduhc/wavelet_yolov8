@@ -21,6 +21,7 @@ from ultralytics.utils.ops import resample_segments, segments2boxes
 from ultralytics.utils.torch_utils import TORCHVISION_0_18
 
 from .augment import (
+    CrackPrior,
     Compose,
     Format,
     LetterBox,
@@ -219,6 +220,14 @@ class YOLODataset(BaseDataset):
             transforms = v8_transforms(self, self.imgsz, hyp)
         else:
             transforms = Compose([LetterBox(new_shape=(self.imgsz, self.imgsz), scaleup=False)])
+        if getattr(hyp, "use_priors", False):
+            transforms.append(
+                CrackPrior(
+                    enable=True,
+                    prior_scales=tuple(getattr(hyp, "prior_scales", (2, 4, 8, 16, 32))),
+                    block_size=int(getattr(hyp, "prior_block_size", 32)),
+                )
+            )
         transforms.append(
             Format(
                 bbox_format="xywh",
@@ -294,7 +303,7 @@ class YOLODataset(BaseDataset):
         values = list(zip(*[list(b.values()) for b in batch]))
         for i, k in enumerate(keys):
             value = values[i]
-            if k in {"img", "text_feats"}:
+            if k in {"img", "text_feats", "priors"}:
                 value = torch.stack(value, 0)
             elif k == "visuals":
                 value = torch.nn.utils.rnn.pad_sequence(value, batch_first=True)
