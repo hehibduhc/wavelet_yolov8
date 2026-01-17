@@ -32,8 +32,8 @@ from ultralytics.nn.modules import (
     C2f,
     C2fAttn,
     C2fCIB,
-    C2fPSA,
     C2fDSConv,
+    C2fPSA,
     C3Ghost,
     C3k2,
     C3x,
@@ -45,9 +45,9 @@ from ultralytics.nn.modules import (
     Conv2,
     ConvTranspose,
     Detect,
+    DSConvConv,
     DWConv,
     DWConvTranspose2d,
-    DSConvConv,
     Focus,
     GhostBottleneck,
     GhostConv,
@@ -57,6 +57,7 @@ from ultralytics.nn.modules import (
     Index,
     LRPCHead,
     Pose,
+    PriorFusion,
     RepC3,
     RepConv,
     RepNCSPELAN4,
@@ -71,7 +72,6 @@ from ultralytics.nn.modules import (
     YOLOEDetect,
     YOLOESegment,
     v10Detect,
-    PriorFusion,
 )
 from ultralytics.utils import DEFAULT_CFG_DICT, LOGGER, YAML, colorstr, emojis
 from ultralytics.utils.checks import check_requirements, check_suffix, check_yaml

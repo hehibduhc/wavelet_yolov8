@@ -21,8 +21,8 @@ from ultralytics.utils.ops import resample_segments, segments2boxes
 from ultralytics.utils.torch_utils import TORCHVISION_0_18
 
 from .augment import (
-    CrackPrior,
     Compose,
+    CrackPrior,
     Format,
     LetterBox,
     RandomLoadText,

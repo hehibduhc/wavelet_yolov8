@@ -59,7 +59,7 @@ class DynamicSnakeConv(nn.Module):
         offset = offset.reshape(n, 2, ks, h, w)
         offset_y = offset[:, 0, :, :, :]
         # offset_x is kept for parity with the official formulation, even if unused here.
-        offset_x = offset[:, 1, :, :, :]
+        offset[:, 1, :, :, :]
 
         y_center = (ks - 1) // 2
         y_offset_new = torch.zeros_like(offset_y)
