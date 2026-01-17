@@ -31,12 +31,11 @@ __all__ = (
     "Attention",
     "BNContrastiveHead",
     "Bottleneck",
-    "DSBottleneck",
     "BottleneckCSP",
     "C2f",
-    "C2fDSConv",
     "C2fAttn",
     "C2fCIB",
+    "C2fDSConv",
     "C2fPSA",
     "C3Ghost",
     "C3k2",
@@ -44,6 +43,7 @@ __all__ = (
     "CBFuse",
     "CBLinear",
     "ContrastiveHead",
+    "DSBottleneck",
     "GhostBottleneck",
     "HGBlock",
     "HGStem",
@@ -345,6 +345,7 @@ class C2fDSConv(nn.Module):
         y = list(self.cv1(x).chunk(2, 1))
         y.extend(m(y[-1]) for m in self.m)
         return self.cv2(torch.cat(y, 1))
+
 
 class C3(nn.Module):
     """CSP Bottleneck with 3 convolutions."""
