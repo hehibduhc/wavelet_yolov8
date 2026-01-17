@@ -18,15 +18,22 @@ else:  # pragma: no cover - optional dependency
     _deform_conv2d_error = None
 
 
+def _to_ksize(k: int | tuple[int, int]) -> int:
+    if isinstance(k, (tuple, list)):
+        return int(k[0])
+    return int(k)
+
+
 class DSConv2d(nn.Module):
     """Dynamic Snake Convolution inspired 2D operator using offset-guided sampling."""
 
-    def __init__(self, c1: int, c2: int, k: int = 3, s: int = 1, p: int | None = None, g: int = 1):
+    def __init__(self, c1: int, c2: int, k: int | tuple[int, int] = 3, s: int = 1, p: int | None = None, g: int = 1):
         super().__init__()
         if deform_conv2d is None:
             raise ImportError(
                 "torchvision.ops.deform_conv2d is required for DSConv2d but is not available."
             ) from _deform_conv2d_error
+        k = _to_ksize(k)
         self.k = k
         self.stride = s
         self.padding = autopad(k, p)
@@ -61,7 +68,7 @@ class DSConvConv(nn.Module):
         self,
         c1: int,
         c2: int,
-        k: int = 3,
+        k: int | tuple[int, int] = 3,
         s: int = 1,
         p: int | None = None,
         g: int = 1,
@@ -77,7 +84,7 @@ class DSConvConv(nn.Module):
             raise ImportError(
                 "torchvision.ops.deform_conv2d is required for DSConvConv but is not available."
             ) from _deform_conv2d_error
-        self.conv = DSConv2d(c1, c2, k, s, p, g)
+        self.conv = DSConv2d(c1, c2, _to_ksize(k), s, p, g)
         self.bn = nn.BatchNorm2d(c2)
         self.act = Conv.default_act if act is True else act if isinstance(act, nn.Module) else nn.Identity()
 
