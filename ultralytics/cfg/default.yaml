@@ -42,6 +42,12 @@ compile: False # (bool | str) enable torch.compile() backend='inductor'; True="d
 # Segmentation
 overlap_mask: True # (bool) merge instance masks into one mask during training (segment only)
 mask_ratio: 4 # (int) mask downsample ratio (segment only)
+use_priors: False # (bool) enable handcrafted prior maps for crack segmentation
+prior_channels: 2 # (int) number of prior channels (wavelet HF + fractal)
+prior_block_size: 32 # (int) block size for local fractal dimension map
+prior_scales: [2, 4, 8, 16, 32] # (list[int]) box-counting scales for fractal map
+use_dsconv: False # (bool) enable DSConv in early backbone blocks
+use_strippooling: False # (bool) enable StripPooling attention in neck
 
 # Classification
 dropout: 0.0 # (float) dropout for classification head (classify only)
